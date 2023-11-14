@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -20,6 +21,21 @@ std::mutex clients_mutex;
 void handle_client(int client_socket);
 void accept_connections(int server_socket);
 void command_loop();
+
+// Function to reverse client message
+void reverse_message(tcpMessage &msg) {
+  std::reverse(msg.chMsg, msg.chMsg + msg.nMsgLen);
+}
+
+// Function to send a message to all clients (except sender)
+void send_message_to_all_clients(int sender_socket, const tcpMessage &msg) {
+  std::lock_guard<std::mutex> lock(clients_mutex);
+  for (const auto &client : clients) {
+    if (client.first != sender_socket) {
+      send(client.first, &msg, sizeof(msg), 0);
+    }
+  }
+}
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
