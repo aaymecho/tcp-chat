@@ -1,3 +1,5 @@
 # Ignored compipled files
 *.o
 *.out
+server
+client
