@@ -7,23 +7,22 @@
 #include <thread>
 #include <unistd.h>
 
-struct tcpMessage
-{
-  unsigned char nVersion;
-  unsigned char nType;
-  unsigned short nMsgLen;
-  char chMsg[1000];
+// Structure for TCP messages
+struct tcpMessage {
+  unsigned char
+      nVersion;        // Version of the protocol (accepts 102 ignores others)
+  unsigned char nType; // Type of the message (77 normal or 201 reverse)
+  unsigned short nMsgLen; // Length of the message
+  char chMsg[1000];       // Message content
 };
 
-void receive_messages(int server_socket)
-{
+// Function to continuously receive messages from server
+void receive_messages(int server_socket) {
   tcpMessage msg;
-  while (true)
-  {
+  while (true) {
     std::memset(&msg, 0, sizeof(msg));
     ssize_t bytes_received = recv(server_socket, &msg, sizeof(msg), 0);
-    if (bytes_received <= 0)
-    {
+    if (bytes_received <= 0) {
       std::cerr << "Connection closed or error occurred." << std::endl;
       break;
     }
@@ -32,10 +31,8 @@ void receive_messages(int server_socket)
   }
 }
 
-int main(int argc, char *argv[])
-{
-  if (argc != 3)
-  {
+int main(int argc, char *argv[]) {
+  if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " <IP Address> <Port>" << std::endl;
     return 1;
   }
@@ -43,8 +40,7 @@ int main(int argc, char *argv[])
   std::string server_ip = argv[1];
   int port = std::stoi(argv[2]);
   int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_socket < 0)
-  {
+  if (server_socket < 0) {
     std::cerr << "Cannot open socket" << std::endl;
     return 1;
   }
@@ -53,15 +49,13 @@ int main(int argc, char *argv[])
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(port);
 
-  if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) <= 0)
-  {
+  if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) <= 0) {
     std::cerr << "Invalid address/ Address not supported" << std::endl;
     return 1;
   }
 
   if (connect(server_socket, (struct sockaddr *)&server_addr,
-              sizeof(server_addr)) < 0)
-  {
+              sizeof(server_addr)) < 0) {
     std::cerr << "Connection Failed" << std::endl;
     return 1;
   }
@@ -73,26 +67,21 @@ int main(int argc, char *argv[])
 
   std::string input;
   tcpMessage msg;
-  while (true)
-  {
+  while (true) {
     std::cout << "Please enter command: ";
     std::getline(std::cin, input);
 
     if (input.empty())
       continue;
 
-    if (input[0] == 'q')
-    {
+    if (input[0] == 'q') {
       break;
-    }
-    else if (input[0] == 'v')
-    {
+    } else if (input[0] == 'v') {
       msg.nVersion = static_cast<unsigned char>(std::stoi(input.substr(2)));
-    }
-    else if (input[0] == 't')
-    {
+    } else if (input[0] == 't') {
       size_t space_pos = input.find(' ', 2);
-      msg.nType = static_cast<unsigned char>(std::stoi(input.substr(2, space_pos - 2)));
+      msg.nType =
+          static_cast<unsigned char>(std::stoi(input.substr(2, space_pos - 2)));
       std::string message_content = input.substr(space_pos + 1);
       msg.nMsgLen = static_cast<unsigned short>(message_content.size());
       std::strncpy(msg.chMsg, message_content.c_str(), sizeof(msg.chMsg));

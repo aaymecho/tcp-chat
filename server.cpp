@@ -10,46 +10,46 @@
 #include <unistd.h>
 #include <vector>
 
-struct tcpMessage
-{
-  unsigned char nVersion;
-  unsigned char nType;
-  unsigned short nMsgLen;
-  char chMsg[1000];
+/*----------------------------------Function-Definitions-Start----------------------------------*/
+// Structure for TCP messages
+struct tcpMessage {
+  unsigned char
+      nVersion;        // Version of the protocol (accepts 102 ignores others)
+  unsigned char nType; // Type of the message (77 normal or 201 reverse)
+  unsigned short nMsgLen; // Length of the message
+  char chMsg[1000];       // Message content
 };
 
+// Global variables
 std::map<int, sockaddr_in> clients;
 std::mutex clients_mutex;
 tcpMessage lastReceivedMessage;
 bool messageAvailable = false;
 
-void reverse_message(tcpMessage &msg)
-{
+// Function to reverse the message content
+void reverse_message(tcpMessage &msg) {
   std::reverse(msg.chMsg, msg.chMsg + msg.nMsgLen);
 }
 
-void send_message_to_all_clients(int sender_socket, const tcpMessage &msg)
-{
+// Function to send a message to all clients except the sender
+void send_message_to_all_clients(int sender_socket, const tcpMessage &msg) {
   std::lock_guard<std::mutex> lock(clients_mutex);
-  for (const auto &client : clients)
-  {
-    if (client.first != sender_socket)
-    {
+  for (const auto &client : clients) {
+    if (client.first != sender_socket) {
       send(client.first, &msg, sizeof(msg), 0);
     }
   }
 }
 
-void handle_client(int client_socket)
-{
+// Function to handle individual client connections
+void handle_client(int client_socket) {
   sockaddr_in client_address;
   {
     std::lock_guard<std::mutex> lock(clients_mutex);
     client_address = clients[client_socket];
   }
 
-  while (true)
-  {
+  while (true) {
     tcpMessage msg;
     ssize_t bytes_received = recv(client_socket, &msg, sizeof(msg), 0);
     if (bytes_received <= 0)
@@ -62,14 +62,10 @@ void handle_client(int client_socket)
       messageAvailable = true;
     }
 
-    if (msg.nVersion == 102)
-    {
-      if (msg.nType == 77)
-      {
+    if (msg.nVersion == 102) {
+      if (msg.nType == 77) {
         send_message_to_all_clients(client_socket, msg);
-      }
-      else if (msg.nType == 201)
-      {
+      } else if (msg.nType == 201) {
         reverse_message(msg);
         send(client_socket, &msg, sizeof(msg), 0);
       }
@@ -80,112 +76,49 @@ void handle_client(int client_socket)
   {
     std::lock_guard<std::mutex> lock(clients_mutex);
     clients.erase(client_socket);
-    std::cout << "Client disconnected: " << inet_ntoa(client_address.sin_addr) << ":" << ntohs(client_address.sin_port) << std::endl;
+    std::cout << "Client disconnected: " << inet_ntoa(client_address.sin_addr)
+              << ":" << ntohs(client_address.sin_port) << std::endl;
   }
 }
 
-void command_loop()
-{
+// Function for the main command loop (continously asks for end-user to input
+// command)
+void command_loop() {
   std::string command;
-  while (true)
-  {
+  while (true) {
     std::cout << "Please enter command: ";
     std::cin >> command;
-    if (command == "msg")
-    {
+    if (command == "msg") {
       std::lock_guard<std::mutex> lock(clients_mutex);
-      if (messageAvailable)
-      {
+      if (messageAvailable) {
         std::cout << "Last Message: " << lastReceivedMessage.chMsg << std::endl;
-      }
-      else
-      {
+      } else {
         std::cout << "No messages received yet." << std::endl;
       }
-    }
-    else if (command == "clients")
-    {
+    } else if (command == "clients") {
       std::lock_guard<std::mutex> lock(clients_mutex);
       std::cout << "Number of Clients: " << clients.size() << std::endl;
-      for (const auto &client : clients)
-      {
-        std::cout << "IP Address: " << inet_ntoa(client.second.sin_addr) << " | Port: " << ntohs(client.second.sin_port) << std::endl;
+      for (const auto &client : clients) {
+        std::cout << "IP Address: " << inet_ntoa(client.second.sin_addr)
+                  << " | Port: " << ntohs(client.second.sin_port) << std::endl;
       }
-    }
-    else if (command == "exit")
-    {
+    } else if (command == "exit") {
       break;
-    }
-    else
-    {
+    } else {
       std::cout << "Unknown command." << std::endl;
     }
   }
 }
 
-int main(int argc, char *argv[])
-{
-  if (argc != 2)
-  {
-    std::cerr << "Usage: " << argv[0] << " <port>" << std::endl;
-    return 1;
-  }
-
-  int port = std::stoi(argv[1]);
-  int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_socket < 0)
-  {
-    std::cerr << "Cannot open socket" << std::endl;
-    return 1;
-  }
-
-  sockaddr_in server_address{};
-  server_address.sin_family = AF_INET;
-  server_address.sin_addr.s_addr = INADDR_ANY;
-  server_address.sin_port = htons(port);
-
-  if (bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) < 0)
-  {
-    std::cerr << "Cannot bind socket to port " << port << std::endl;
-    return 1;
-  }
-
-  if (listen(server_socket, 5) < 0)
-  {
-    std::cerr << "Cannot listen on port" << std::endl;
-    return 1;
-  }
-
-  std::cout << "Server is listening on port " << port << std::endl;
-
-  std::thread accept_thread(accept_connections, server_socket);
-  command_loop();
-
-  {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    for (const auto &client : clients)
-    {
-      close(client.first);
-    }
-    clients.clear();
-  }
-
-  close(server_socket);
-  accept_thread.join();
-
-  return 0;
-}
-
-void accept_connections(int server_socket)
-{
-  while (true)
-  {
+// Function to accept incoming client connections
+void accept_connections(int server_socket) {
+  while (true) {
     sockaddr_in client_address;
     socklen_t client_address_len = sizeof(client_address);
-    int client_socket = accept(server_socket, (sockaddr *)&client_address, &client_address_len);
+    int client_socket =
+        accept(server_socket, (sockaddr *)&client_address, &client_address_len);
 
-    if (client_socket < 0)
-    {
+    if (client_socket < 0) {
       std::cerr << "Failed to accept client connection." << std::endl;
       continue;
     }
@@ -198,4 +131,53 @@ void accept_connections(int server_socket)
     std::thread client_thread(handle_client, client_socket);
     client_thread.detach();
   }
+}
+
+/*----------------------------------Function-Definitions-End----------------------------------*/
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    std::cerr << "Usage: " << argv[0] << " <port>" << std::endl;
+    return 1;
+  }
+
+  int port = std::stoi(argv[1]);
+  int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_socket < 0) {
+    std::cerr << "Cannot open socket" << std::endl;
+    return 1;
+  }
+
+  sockaddr_in server_address{};
+  server_address.sin_family = AF_INET;
+  server_address.sin_addr.s_addr = INADDR_ANY;
+  server_address.sin_port = htons(port);
+
+  if (bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) <
+      0) {
+    std::cerr << "Cannot bind socket to port " << port << std::endl;
+    return 1;
+  }
+
+  if (listen(server_socket, 5) < 0) {
+    std::cerr << "Cannot listen on port" << std::endl;
+    return 1;
+  }
+
+  std::cout << "Server is listening on port " << port << std::endl;
+  std::thread accept_thread(accept_connections, server_socket);
+  command_loop();
+
+  // Scope created to automatically destry lock_guard
+  {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (const auto &client : clients) {
+      close(client.first);
+    }
+    clients.clear();
+  }
+
+  close(server_socket);
+  accept_thread.join();
+  return 0;
 }
